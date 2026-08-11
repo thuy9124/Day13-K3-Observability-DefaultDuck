@@ -11,9 +11,8 @@ code{display:block;margin-top:18px;color:#8fa6c8;font-size:11px;white-space:norm
 .source{margin-top:22px;color:#7187a7;font-size:12px} @media(max-width:900px){.grid{grid-template-columns:1fr}}
 </style></head><body><main>
 <header><div><h1>Day 13 AI Observability</h1><div class="meta">Runtime dashboard · real JSONL data</div></div>
-<div class="meta">Last 60 min · refresh 30s<br>2026-08-11T07:38:21+00:00</div></header>
-<div class="grid">
-            <section class="card" id="latency">
+<div class="meta">Last 60 min · refresh 30s<br>2026-08-11T07:49:29+00:00</div></header>
+<div class="grid"><section class="card" id="latency">
               <div class="eyebrow">LATENCY</div>
               <h2>Latency percentiles</h2>
               <div class="value">P50 150 · P95 3629 · P99 5209</div>
@@ -21,9 +20,7 @@ code{display:block;margin-top:18px;color:#8fa6c8;font-size:11px;white-space:norm
                 lte 3000
                 ms</div>
               <code>event == &quot;response_sent&quot; | percentile(latency_ms, [50, 95, 99])</code>
-            </section>
-            
-            <section class="card" id="traffic">
+            </section><section class="card" id="traffic">
               <div class="eyebrow">TRAFFIC</div>
               <h2>Request traffic</h2>
               <div class="value">25 requests · 0.42/min</div>
@@ -31,9 +28,7 @@ code{display:block;margin-top:18px;color:#8fa6c8;font-size:11px;white-space:norm
                 gte 1
                 requests_per_minute</div>
               <code>event == &quot;request_received&quot; | count() by 1m</code>
-            </section>
-            
-            <section class="card" id="errors">
+            </section><section class="card" id="errors">
               <div class="eyebrow">ERRORS</div>
               <h2>Error rate and breakdown</h2>
               <div class="value">0.00% · 0 failures</div>
@@ -41,9 +36,7 @@ code{display:block;margin-top:18px;color:#8fa6c8;font-size:11px;white-space:norm
                 lte 2
                 percent</div>
               <code>count(event == &quot;request_failed&quot;) / count(event == &quot;request_received&quot;) * 100; count_by(error_type)</code>
-            </section>
-            
-            <section class="card" id="cost">
+            </section><section class="card" id="cost">
               <div class="eyebrow">COST</div>
               <h2>Cost over time</h2>
               <div class="value">$0.0542 total</div>
@@ -51,9 +44,7 @@ code{display:block;margin-top:18px;color:#8fa6c8;font-size:11px;white-space:norm
                 lte 2.5
                 usd</div>
               <code>event == &quot;response_sent&quot; | sum(cost_usd) by 1m; sum(cost_usd)</code>
-            </section>
-            
-            <section class="card" id="tokens">
+            </section><section class="card" id="tokens">
               <div class="eyebrow">TOKENS</div>
               <h2>Input and output tokens</h2>
               <div class="value">1,702 input · 3,271 output</div>
@@ -61,9 +52,7 @@ code{display:block;margin-top:18px;color:#8fa6c8;font-size:11px;white-space:norm
                 lte 50000
                 tokens</div>
               <code>event == &quot;response_sent&quot; | sum(tokens_in), sum(tokens_out)</code>
-            </section>
-            
-            <section class="card" id="quality">
+            </section><section class="card" id="quality">
               <div class="eyebrow">QUALITY</div>
               <h2>Quality proxy</h2>
               <div class="value">0.876 average</div>
@@ -71,7 +60,6 @@ code{display:block;margin-top:18px;color:#8fa6c8;font-size:11px;white-space:norm
                 gte 0.75
                 score_0_to_1</div>
               <code>event == &quot;response_sent&quot; | mean(quality_score)</code>
-            </section>
-            </div>
-<div class="source">Source: data/logs.jsonl · 55 records · 25 completed responses</div>
+            </section></div>
+<div class="source">Source: data/logs.jsonl · 57 records · 25 completed responses</div>
 </main></body></html>

@@ -76,7 +76,7 @@ def main() -> None:
                 {html.escape(panel['unit'])}</div>
               <code>{html.escape(panel['query'])}</code>
             </section>
-            """
+            """.strip()
         )
 
     generated = datetime.now(timezone.utc).isoformat(timespec="seconds")

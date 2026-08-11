@@ -4,7 +4,7 @@
 
 - Tên nhóm: DefaultDuck
 - Repository URL: https://github.com/thuy9124/Day13-K3-Observability-DefaultDuck
-- Commit SHA cuối: cập nhật ở commit bàn giao cuối
+- Commit SHA kỹ thuật/evidence: `48ea56f`
 - Thành viên/đóng góp đã xác định trong Git: xem Mục 7.
 
 ## 2. Kết quả kỹ thuật
