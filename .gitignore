@@ -1,4 +1,5 @@
 .venv/
+.d13venv/
 __pycache__/
 *.pyc
 .DS_Store
