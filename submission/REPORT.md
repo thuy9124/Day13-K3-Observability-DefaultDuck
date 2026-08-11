@@ -4,106 +4,79 @@
 
 - Tên nhóm: DefaultDuck
 - Repository URL: https://github.com/thuy9124/Day13-K3-Observability-DefaultDuck
-- Commit SHA cuối: 936e28c7cb18911904fe8ae759fb518cc84e9581
-- Thành viên và vai trò:
-  - Thành viên 1: Logging & PII Scrubbing, Middleware Correlation ID
-  - Thành viên 2: Tracing, Prompt Management & Dashboard Validator
-* **Tên nhóm:**
-* **Repository URL:**
-* **Commit SHA cuối:**
-* **Thành viên và vai trò:**
+- Commit SHA cuối: cập nhật sau khi commit bài nộp
+- Phân vai đã có trong report trước:
+  - Thành viên 1: Logging & PII Scrubbing, Middleware Correlation ID.
+  - Thành viên 2: Tracing, Prompt Management & Dashboard Validator.
 
 ## 2. Kết quả kỹ thuật
 
-- Điểm `validate_logs.py`: 100/100 (Đã hoàn thành 100% tiêu chí)
-- Tổng số traces: 10+ traces
-- Số PII leak còn lại: 0
-- Link/đường dẫn dashboard: `config/dashboard.yaml` (6/6 panel hợp lệ)
+- Điểm `validate_logs.py`: 100/100.
+- Langfuse traces đã xác minh qua API: 20 traces (10 baseline/v1 và 10 candidate/v2).
+- Số PII leak còn lại: 0.
+- Dashboard contract: `HỢP LỆ: 6/6 panel có trong dashboard contract`.
+- Dashboard runtime và ảnh chụp UI: cần bổ sung trước khi nộp.
 
 ## 3. Logging và tracing
 
-- Evidence correlation ID: Header `x-request-id` và trường `correlation_id` chuẩn dạng `req-xxxxxx` tự động được sinh và truyền qua các log record trong `data/logs.jsonl`.
-- Evidence PII redaction: Tất cả thông tin Email, Số điện thoại Việt Nam, CCCD, Số thẻ tín dụng, Hộ chiếu, Địa chỉ Việt Nam đều được tự động thay thế bằng nhãn `[REDACTED_...]` qua `scrub_event`.
-- Evidence trace waterfall: Dữ liệu trace bao gồm metadata `user_id_hash`, `session_id`, `feature`, `model`, `prompt_name`, `prompt_version`, `prompt_label`.
-- Giải thích một span đáng chú ý: Span `generation` chứa chi tiết `usage_details` (prompt_tokens, completion_tokens), `cost_details` và `quality_score`.
+- Evidence correlation ID: header `x-request-id` và trường `correlation_id` dạng `req-xxxxxxxx` được truyền qua các log record trong `data/logs.jsonl`.
+- Evidence PII redaction: email, số điện thoại, CCCD, số thẻ tín dụng, hộ chiếu và địa chỉ được xử lý bởi `scrub_event` trước khi ghi log.
+- Trace metadata: `prompt_name`, `prompt_label`, `prompt_version`, `prompt_source`, user/session và tags feature/model.
+- Generation span có `usage_details` (prompt/completion tokens), `cost_details` và liên kết managed prompt.
+- Danh sách trace API: [`evidence/baseline_traces.json`](evidence/baseline_traces.json) và [`evidence/candidate_traces.json`](evidence/candidate_traces.json).
+- Trace waterfall thật trên Langfuse UI: chưa có do tài khoản hiện tại không có quyền truy cập project chứa traces.
 
-## 4. Prompt versioning
+## 4. Prompt versioning — Checkpoint 2
 
-- Prompt name: `day13-chat`
-- Version/label baseline: `production` (v1 - `local-v1` / Langfuse Managed Prompt)
-- Version/label candidate: `candidate` (v2 - `Yêu cầu: Trả lời ngắn gọn, định dạng rõ ràng.`)
-- Trace ID của mỗi version: Gắn kết tự động thông qua metadata (`prompt_version`, `prompt_label`, `prompt_name`).
-- Bằng chứng đổi label hoặc rollback: Xem chi tiết tài liệu bằng chứng tại `submission/evidence/EVIDENCE_PROMPT_VERSIONING.md`.
+- Managed prompt: `day13-chat`.
+- Baseline: Langfuse version 1, labels `baseline` và `production`.
+- Candidate: Langfuse version 2, label `candidate`.
+- Promote thực tế: `production` đã được chuyển sang version 2 và hậu kiểm qua Prompts API trả về version 2.
+- Rollback thực tế: `production` đã được chuyển lại version 1 và hậu kiểm qua Prompts API trả về version 1.
+- Audit machine-readable: [`evidence/prompt_lifecycle.json`](evidence/prompt_lifecycle.json) và [`evidence/prompt_versions.json`](evidence/prompt_versions.json).
+
+| Label/version | Trace ID | Link trực tiếp |
+|---|---|---|
+| `baseline` / v1 | `46597bc000a191ff5c39c43a2f5a945c` | [Mở trace baseline/v1](https://cloud.langfuse.com/project/cmso6msot04syad0ducpc4wnw/traces/46597bc000a191ff5c39c43a2f5a945c) |
+| `candidate` / v2 | `cdca6743b1647c8a5928037763f808f4` | [Mở trace candidate/v2](https://cloud.langfuse.com/project/cmso6msot04syad0ducpc4wnw/traces/cdca6743b1647c8a5928037763f808f4) |
+
+Các link trên yêu cầu tài khoản là thành viên của project Langfuse tương ứng hoặc
+trace đã được chủ project đặt public.
+
+Evidence ảnh Langfuse UI hiện chưa có do tài khoản chụp ảnh chưa được cấp quyền
+vào project chứa traces. Không sử dụng ảnh render hoặc ảnh mô phỏng thay thế.
 
 ## 5. Dashboard, SLO và alerts
 
-- Kết quả `validate_dashboard.py`: `HỢP LỆ: 6/6 panel có trong dashboard contract.`
-- Evidence dashboard: Đáp ứng đầy đủ 6 panel: Latency (p50, p95, p99), Request traffic (rate per minute), Error rate & breakdown, Cost over time, Input & output tokens, Quality proxy.
+- Kết quả `validate_dashboard.py`: `HỢP LỆ: 6/6 panel có trong dashboard contract`.
+- Ảnh chụp terminal validator thật: [`evidence/dashboard-validator.png`](evidence/dashboard-validator.png).
+- Sáu panel theo contract: Latency P50/P95/P99, Request traffic, Error rate/breakdown, Cost over time, Input/output tokens và Quality proxy.
 - SLO đã chọn và lý do:
-  - Latency P95 <= 3000ms: Đảm bảo trải nghiệm phản hồi tức thì cho người dùng AI Chat.
-  - Error rate <= 2%: Duy trì độ tin cậy và sẵn sàng của API.
-  - Daily cost <= 2.5 USD: Kiểm soát ngân sách LLM token.
-  - Quality score avg >= 0.75: Đảm bảo câu trả lời AI hữu ích và đúng trọng tâm.
-- Alert rules và runbook: Được định nghĩa trong `config/alert_rules.yaml` và hướng dẫn xử lý tại `docs/alerts.md`.
+  - Latency P95 ≤ 3000 ms, target 99.5% — giới hạn thời gian chờ của phần lớn người dùng.
+  - Error rate ≤ 2%, target 99.0% — bảo đảm API ổn định.
+  - Average quality score ≥ 0.75, target 95.0% — phát hiện suy giảm chất lượng khi HTTP vẫn thành công.
+  - Daily cost ≤ 2.5 USD, target 100% — kiểm soát chi phí vận hành.
+- Alert rules và runbook: ba symptom-based alerts `HighLatencyP95`, `HighErrorRate`, `LowQualityScore` trong `config/alert_rules.yaml`, liên kết tới `docs/alerts.md`.
+- Evidence dashboard runtime: chưa có file ảnh thật; cần bổ sung tên panel, time range, đơn vị và threshold/SLO line.
 
 ## 6. Điều tra challenge
 
-- Challenge ID: `day13-k3`
+Nội dung dưới đây được giữ lại từ report của nhóm trước lần hoàn thiện Checkpoint 2 và cần được nhóm đối chiếu với challenge chính thức trước khi nộp:
+
+- Challenge ID: `day13-k3`.
 - Triệu chứng từ metrics: Latency p95 tăng đột biến trên panel Latency Percentiles.
-- Trace ID liên quan: Tra cứu span RAG retrieval và FakeLLM generation trong Langfuse/Logs.
-- Log line/correlation ID liên quan: Lọc log theo `latency_ms > 3000` với `event == "response_sent"`.
-- Root cause: Tắc nghẽn hoặc độ trễ gia tăng từ bước RAG document retrieval đối với tính năng cụ thể.
-- Fix action: Tối ưu hóa truy vấn RAG, thêm cache kết quả tìm kiếm và thiết lập timeout.
-- Preventive measure: Bổ sung cảnh báo `HighLatencyP95` để chủ động phát hiện trước khi ảnh hưởng SLO.
+- Trace ID liên quan: tra cứu span RAG retrieval và FakeLLM generation trong Langfuse/Logs.
+- Log line/correlation ID liên quan: lọc log theo `latency_ms > 3000` với `event == "response_sent"`.
+- Root cause: tắc nghẽn hoặc độ trễ gia tăng từ bước RAG document retrieval đối với tính năng cụ thể.
+- Fix action: tối ưu truy vấn RAG, thêm cache kết quả và thiết lập timeout.
+- Preventive measure: bổ sung cảnh báo `HighLatencyP95` để phát hiện trước khi ảnh hưởng SLO.
 
 ## 7. Đóng góp cá nhân
+
+Các dòng của thành viên đã có trong report cũ được giữ nguyên; cần thay nhánh/commit bằng link commit hoặc PR thật trước khi nộp.
 
 | Thành viên | Phần việc | Commit/PR | Điều đã học |
 |---|---|---|---|
-| khanhngo (Member 2A) | Tracing Integration, Prompt Versioning & Evidence Documentation | `khanhngo` | Quản lý prompt lifecycle, metadata trace & zero-downtime rollback |
-| DefaultDuck (Member 2B) | Logging, PII Redaction, Correlation ID, Alert Rules, Dashboard Contract | `936e28c` | Xây dựng hệ thống Observability chuẩn cho AI Application |
-
-
-
-* **Evidence correlation ID:**
-* **Evidence PII redaction:**
-* **Evidence trace waterfall:**
-* **Giải thích một span đáng chú ý:**
-
-## 4. Prompt versioning
-
-* **Prompt name:**
-* **Version/label baseline:**
-* **Version/label candidate:**
-* **Trace ID của mỗi version:**
-* **Bằng chứng đổi label hoặc rollback:**
-
-## 5. Dashboard, SLO và alerts
-
-* **Kết quả `validate_dashboard.py`:** `HỢP LỆ: 6/6 panel có trong dashboard contract.`
-* **Evidence dashboard:** `submission/evidence/dashboard-6-panels.png` (bổ sung ảnh runtime trước khi nộp bài).
-* **SLO đã chọn và lý do:**
-
-  * **Latency P95:** `<= 3000 ms`, target `99.5%` — giới hạn thời gian chờ của phần lớn người dùng và phát hiện sớm request chậm.
-  * **Error rate:** `<= 2%`, target `99.0%` — bảo đảm API trả kết quả ổn định và hạn chế request thất bại.
-  * **Average quality score:** `>= 0.75`, target `95.0%` — phát hiện suy giảm chất lượng ngay cả khi API vẫn trả HTTP thành công.
-  * **Daily cost:** `<= 2.5 USD`, target `100%` — kiểm soát chi phí vận hành theo contract của dashboard.
-* **Alert rules và runbook:** Đã cấu hình ba symptom-based alerts `HighLatencyP95`, `HighErrorRate`, `LowQualityScore` trong `config/alert_rules.yaml`. Mỗi alert liên kết tới `docs/alerts.md`, gồm ảnh hưởng người dùng, ba bước điều tra Metrics → Traces → Logs, mitigation, owner và điều kiện escalation.
-
-## 6. Điều tra challenge
-
-* **Challenge ID:**
-* **Triệu chứng từ metrics:**
-* **Trace ID liên quan:**
-* **Log line/correlation ID liên quan:**
-* **Root cause:**
-* **Fix action:**
-* **Preventive measure:**
-
-## 7. Đóng góp cá nhân
-
-Với mỗi thành viên, ghi rõ nhiệm vụ và link commit/PR tương ứng.
-
-| Thành viên               | Phần việc                                                                     | Commit/PR                        | Điều đã học                                                                        |
-| ------------------------ | ----------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
-| [Điền tên thành viên 2B] | Checkpoint 2B: dashboard contract, SLO, alert rules, runbook và Mục 5 báo cáo | [Bổ sung commit/PR sau khi push] | Thiết kế alert theo triệu chứng/SLO và điều tra sự cố theo Metrics → Traces → Logs |
+| Dương Minh Quân — `2A202601903` | Xác minh và hoàn thiện Checkpoint 2: managed prompt lifecycle, traces thật, audit và tài liệu evidence | `63fa173` | Xác minh prompt label/version qua trace và rollback bằng hậu kiểm API |
+| khanhngo (Member 2A) | Tracing Integration, Prompt Versioning & Evidence Documentation | `khanhngo` | Quản lý prompt lifecycle, metadata trace và zero-downtime rollback |
+| DefaultDuck (Member 2B) | Logging, PII Redaction, Correlation ID, Alert Rules, Dashboard Contract | `936e28c` | Xây dựng hệ thống observability cho AI application |

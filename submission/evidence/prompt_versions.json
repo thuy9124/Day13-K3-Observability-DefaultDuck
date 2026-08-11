@@ -1,0 +1,30 @@
+[
+  {
+    "name": "day13-chat",
+    "version": 1,
+    "labels": [
+      "baseline",
+      "production"
+    ],
+    "prompt": "Feature={{feature}}\nDocs={{docs}}\nQuestion={{message}}",
+    "commit_message": "day13 v1"
+  },
+  {
+    "name": "day13-chat",
+    "version": 2,
+    "labels": [
+      "candidate"
+    ],
+    "prompt": "Feature={{feature}}\nDocs={{docs}}\nQuestion={{message}}\nAnswer in a clear, structured way in 3-5 sentences.",
+    "commit_message": "day13 v2"
+  },
+  {
+    "name": "day13-chat",
+    "version": 3,
+    "labels": [
+      "latest"
+    ],
+    "prompt": "Feature={{feature}}\nDocs={{docs}}\nQuestion={{message}}\nRules: answer from Docs only; max 60 words; no PII; end with a one-line summary.",
+    "commit_message": "day13 v3"
+  }
+]

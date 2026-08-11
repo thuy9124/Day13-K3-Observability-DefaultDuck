@@ -18,7 +18,6 @@ Cách chạy:
 
 Evidence đầu ra:
     submission/evidence/traces.json    — danh sách trace + prompt metadata
-    submission/evidence/traces.txt     — tóm tắt dạng văn bản
 """
 
 from __future__ import annotations
@@ -31,6 +30,8 @@ import sys
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -40,6 +41,9 @@ from langfuse import Langfuse
 
 EVIDENCE_DIR = REPO_ROOT / "submission" / "evidence"
 MIN_TRACES = 10
+
+# This script is not launched through uvicorn, so explicitly load SDK settings.
+load_dotenv(REPO_ROOT / ".env")
 
 
 def _has_keys() -> bool:
@@ -62,6 +66,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Ghi >= 10 traces và thu evidence")
     parser.add_argument("--count", type=int, default=12, help="Số request tối thiểu cần ghi")
     parser.add_argument("--skip-load", action="store_true", help="Không chạy load test, chỉ liệt kê traces")
+    parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="API base URL")
+    parser.add_argument(
+        "--wait-seconds", type=int, default=90, help="Thời gian tối đa chờ Langfuse ingest bất đồng bộ"
+    )
+    parser.add_argument(
+        "--output-stem", default="traces", help="Tên file evidence (không gồm .json/.txt)"
+    )
     args = parser.parse_args()
 
     if not _has_keys():
@@ -75,44 +86,56 @@ def main() -> None:
         print(f"== Chạy load test để tạo >= {args.count} traces ==")
         for i in range(0, max(args.count, MIN_TRACES), 10):
             subprocess.run(
-                [sys.executable, str(REPO_ROOT / "scripts" / "load_test.py"), "--concurrency", "5"],
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "load_test.py"),
+                    "--concurrency",
+                    "5",
+                    "--base-url",
+                    args.base_url,
+                ],
                 cwd=str(REPO_ROOT),
                 check=False,
             )
             time.sleep(2)  # cho langfuse flush
 
     client = Langfuse()
-    try:
-        resp = client.api.trace.list(limit=50)
-    except Exception as exc:
-        print(f"FAIL: list traces API | {type(exc).__name__}: {exc}")
-        sys.exit(1)
-
     rows = []
-    for tr in getattr(resp, "data", []) or []:
-        ts = getattr(tr, "timestamp", None)
+    deadline = time.monotonic() + max(args.wait_seconds, 0)
+    while True:
         try:
-            created_at = dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-            if created_at < window_start:
-                continue  # chỉ giữ trace được tạo từ lúc script chạy
-        except (ValueError, TypeError):
-            pass  # không parse được timestamp -> giữ lại để không sót
-        metadata = getattr(tr, "metadata", None) or {}
-        tags = list(getattr(tr, "tags", []) or [])
-        rows.append(
-            {
-                "trace_id": getattr(tr, "id", None),
-                "timestamp": str(getattr(tr, "timestamp", "")),
-                "latency_ms": getattr(tr, "latency", None),
-                "user_id": getattr(tr, "user_id", None),
-                "session_id": getattr(tr, "session_id", None),
-                "tags": tags,
-                "prompt_name": metadata.get("prompt_name"),
-                "prompt_label": metadata.get("prompt_label"),
-                "prompt_version": metadata.get("prompt_version"),
-                "prompt_source": metadata.get("prompt_source"),
-            }
-        )
+            resp = client.api.trace.list(limit=100, from_timestamp=window_start)
+        except Exception as exc:
+            print(f"FAIL: list traces API | {type(exc).__name__}: {exc}")
+            sys.exit(1)
+
+        rows = []
+        for tr in getattr(resp, "data", []) or []:
+            metadata = getattr(tr, "metadata", None) or {}
+            tags = list(getattr(tr, "tags", []) or [])
+            latency_seconds = getattr(tr, "latency", None)
+            trace_id = getattr(tr, "id", None)
+            rows.append(
+                {
+                    "trace_id": trace_id,
+                    "trace_url": client.get_trace_url(trace_id=trace_id) if trace_id else None,
+                    "timestamp": str(getattr(tr, "timestamp", "")),
+                    "latency_ms": round(latency_seconds * 1000, 1)
+                    if isinstance(latency_seconds, (int, float))
+                    else None,
+                    "user_id": getattr(tr, "user_id", None),
+                    "session_id": getattr(tr, "session_id", None),
+                    "tags": tags,
+                    "prompt_name": metadata.get("prompt_name"),
+                    "prompt_label": metadata.get("prompt_label"),
+                    "prompt_version": metadata.get("prompt_version"),
+                    "prompt_source": metadata.get("prompt_source"),
+                }
+            )
+        if len(rows) >= MIN_TRACES or time.monotonic() >= deadline:
+            break
+        print(f"Langfuse mới ingest {len(rows)}/{MIN_TRACES} trace; chờ thêm 5s...")
+        time.sleep(5)
 
     print(f"\n== Tìm thấy {len(rows)} trace (limit=50, mới nhất trước) ==")
     for r in rows[:5]:
@@ -123,18 +146,11 @@ def main() -> None:
     if len(rows) > 5:
         print(f"  ... (+{len(rows) - 5} trace nữa)")
 
-    (EVIDENCE_DIR / "traces.json").write_text(
+    json_path = EVIDENCE_DIR / f"{args.output_stem}.json"
+    json_path.write_text(
         json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    lines = [f"Traces trên Langfuse (tổng {len(rows)}):"]
-    for r in rows:
-        lines.append(
-            f"  {r['trace_id']}  prompt={r['prompt_name']}@{r['prompt_label']} "
-            f"v{r['prompt_version']}  source={r['prompt_source']}  tags={r['tags']}  {r['latency_ms']}ms"
-        )
-    (EVIDENCE_DIR / "traces.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("\nEvidence saved ->", EVIDENCE_DIR / "traces.json")
-    print("Evidence saved ->", EVIDENCE_DIR / "traces.txt")
+    print("\nEvidence saved ->", json_path)
 
     if len(rows) < MIN_TRACES:
         print(f"\nCẢNH BÁO: chỉ {len(rows)} trace (< {MIN_TRACES}). Chạy thêm load test.")
