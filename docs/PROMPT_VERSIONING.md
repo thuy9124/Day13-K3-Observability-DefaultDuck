@@ -25,14 +25,14 @@ Nếu Langfuse không khả dụng, app dùng template local và trace metadata 
 
 1. Tạo version 1, gắn labels `baseline` và `production`.
 2. Tạo version 2 với một thay đổi nhỏ về format hoặc độ dài câu trả lời, gắn label `candidate`.
-3. Tạo version 3 (tùy chọn, mở rộng): format gọn hơn + ràng buộc độ dài câu trả lời, gắn label `candidate`.
+3. Giữ version 3 mở rộng nếu nhóm đã triển khai; dùng label `experimental` để không chiếm label chấm điểm `candidate` của v2.
 4. Chạy cùng một input với `LANGFUSE_PROMPT_LABEL=baseline` và `candidate`.
 5. Mở hai trace, kiểm tra `prompt_name`, `prompt_label`, `prompt_version` và prompt link.
 6. Chuyển label `production` sang version 2, chạy lại một request.
 7. Rollback `production` về version 1 và lưu ảnh evidence.
 
-Script tự động hoàn thành bước 1–3 và 6–7 (`scripts/prompt_versioning.py`), tạo đủ
-v1/v2/v3, đổi `production` sang version chứa v2 rồi rollback về version chứa v1.
+Script tự động tạo/chuẩn hóa v1/v2, bảo toàn v3 mở rộng, đổi `production` sang
+version chứa v2 rồi rollback về version chứa v1.
 Script tái dùng version đã tồn tại theo nội dung prompt nên chạy lại không nhân
 đôi version. Chạy khi đã có key trong `.env`:
 
@@ -48,7 +48,7 @@ Prompt v1/v2/v3 — giữ đúng contract 3 biến `{{feature}} {{docs}} {{messa
 |---|---|---|
 | v1 | Template gốc | `baseline`, `production` |
 | v2 | Thêm hướng dẫn format, 3–5 câu | `candidate` |
-| v3 | `Rules: answer from Docs only; max 60 words; no PII; end with a one-line summary.` | `candidate` |
+| v3 | Ràng buộc Docs-only, tối đa 60 từ, không PII | `experimental` hoặc `latest` |
 
 Không chấm prompt nào “hay hơn”. Điểm nằm ở khả năng truy xuất version, đổi label và rollback có bằng chứng.
 

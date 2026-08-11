@@ -1,11 +1,11 @@
-"""Thiết lập prompt versioning v1/v2/v3 trên Langfuse cho Day 13 lab.
+"""Thiết lập prompt versioning v1/v2 và giữ v3 mở rộng trên Langfuse.
 
-Quy trình theo docs/PROMPT_VERSIONING.md, mở rộng thêm v3:
+Quy trình theo docs/PROMPT_VERSIONING.md:
 
   1. Tạo v1 (template gốc), gắn label `baseline` + `production`.
   2. Tạo v2 (thêm dòng hướng dẫn), gắn label `candidate`.
-  3. Tạo v3 (format gọn hơn + ràng buộc độ dài), gắn label `candidate`.
-  4. Kiểm tra cả 3 version qua API GET /prompts.
+  3. Giữ v3 mở rộng với label `experimental` khi cần tạo mới.
+  4. Kiểm tra các version qua API GET /prompts.
   5. Chuyển label `production` sang v2 (đổi label).
   6. Rollback `production` về v1.
 
@@ -20,7 +20,6 @@ Cách chạy (đã có LANGFUSE_PUBLIC_KEY/SECRET_KEY trong .env):
 
 Evidence đầu ra (khi không --dry-run):
     submission/evidence/prompt_versions.json   — danh sách version + label
-    submission/evidence/prompt_versions.txt    — tóm tắt dạng văn bản
 """
 
 from __future__ import annotations
@@ -30,6 +29,8 @@ import json
 import os
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -57,6 +58,10 @@ PROMPT_NAME = "day13-chat"
 
 EVIDENCE_DIR = REPO_ROOT / "submission" / "evidence"
 
+# CLI scripts are normally started with ``python ...`` (not ``uvicorn --env-file``),
+# therefore the SDK would not otherwise receive the Langfuse credentials/host.
+load_dotenv(REPO_ROOT / ".env")
+
 
 def _redact_env_key(name: str) -> str:
     value = os.environ.get(name, "")
@@ -78,6 +83,11 @@ def main() -> None:
     configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Setup prompt v1/v2/v3 + đổi label + rollback trên Langfuse")
     parser.add_argument("--dry-run", action="store_true", help="Chỉ in kế hoạch, không gọi API")
+    parser.add_argument(
+        "--stop-after-promote",
+        action="store_true",
+        help="Dừng với production ở v2 để chụp UI; chạy lại không cờ để rollback về v1",
+    )
     args = parser.parse_args()
 
     pub = _redact_env_key("LANGFUSE_PUBLIC_KEY")
@@ -94,12 +104,12 @@ def main() -> None:
         prefix = "OK  " if ok else "FAIL"
         print(f"{prefix} | {step}" + (f" | {detail}" if detail else ""))
 
-    # -- 1..3. Tạo/đảm bảo tồn tại 3 version ---------------------------------
+    # -- 1..3. Tạo/đảm bảo tồn tại các version --------------------------------
     versions: list[dict] = []
     plan = [
         (1, PROMPT_V1, ["baseline", "production"]),
         (2, PROMPT_V2, ["candidate"]),
-        (3, PROMPT_V3, ["candidate"]),
+        (3, PROMPT_V3, ["experimental"]),
     ]
 
     # Đọc các version đã có trên server theo nội dung prompt để tái dùng
@@ -159,7 +169,8 @@ def main() -> None:
 
     if args.dry_run:
         print("DRY  | đổi label production -> v2")
-        print("DRY  | rollback production -> v1")
+        if not args.stop_after_promote:
+            print("DRY  | rollback production -> v1")
         print("Dry-run xong. Bật --dry-run off (mặc định) khi có backend.")
         return
 
@@ -196,24 +207,74 @@ def main() -> None:
         v1_ver = next((v.get("version") for v in versions if v.get("prompt") == PROMPT_V1), v1_ver)
         v2_ver = next((v.get("version") for v in versions if v.get("prompt") == PROMPT_V2), v2_ver)
 
+    lifecycle: dict[str, object] = {
+        "prompt_name": PROMPT_NAME,
+        "baseline_version": v1_ver,
+        "candidate_version": v2_ver,
+    }
     if v2_ver is not None:
         try:
-            client.update_prompt(name=PROMPT_NAME, version=v2_ver, new_labels=["production"])
-            log(True, f"update_prompt v{v2_ver} -> production", "production hiện trỏ tới v2")
+            # Explicitly move candidate away from any stale optional version.
+            client.update_prompt(name=PROMPT_NAME, version=v2_ver, new_labels=["candidate"])
+            candidate = client.api.prompts.get(PROMPT_NAME, label="candidate")
+            candidate_ver = getattr(candidate, "version", None)
+            lifecycle["candidate_version_after_normalize"] = candidate_ver
+            if candidate_ver != v2_ver:
+                raise RuntimeError(f"hậu kiểm candidate=v{candidate_ver}, mong đợi v{v2_ver}")
+
+            client.update_prompt(
+                name=PROMPT_NAME, version=v2_ver, new_labels=["candidate", "production"]
+            )
+            promoted = client.api.prompts.get(PROMPT_NAME, label="production")
+            promoted_ver = getattr(promoted, "version", None)
+            lifecycle["after_promote_production_version"] = promoted_ver
+            if promoted_ver != v2_ver:
+                raise RuntimeError(f"hậu kiểm production=v{promoted_ver}, mong đợi v{v2_ver}")
+            log(True, f"update_prompt v{v2_ver} -> production", "đã hậu kiểm production trỏ tới v2")
         except Exception as exc:
             log(False, f"update_prompt v{v2_ver} -> production", f"{type(exc).__name__}: {exc}")
     else:
         log(False, "update_prompt v2 -> production", "không tìm thấy version chứa v2")
 
     # -- 6. Rollback production về version chứa v1 ------------------------------
-    if v1_ver is not None:
+    if args.stop_after_promote:
+        log(True, "stop after promote", "giữ production ở v2 để chụp evidence UI")
+    elif v1_ver is not None:
         try:
-            client.update_prompt(name=PROMPT_NAME, version=v1_ver, new_labels=["production"])
-            log(True, f"update_prompt v{v1_ver} -> production (rollback)", "production trở về v1")
+            client.update_prompt(
+                name=PROMPT_NAME, version=v1_ver, new_labels=["baseline", "production"]
+            )
+            rolled_back = client.api.prompts.get(PROMPT_NAME, label="production")
+            rollback_ver = getattr(rolled_back, "version", None)
+            lifecycle["after_rollback_production_version"] = rollback_ver
+            if rollback_ver != v1_ver:
+                raise RuntimeError(f"hậu kiểm production=v{rollback_ver}, mong đợi v{v1_ver}")
+            log(True, f"update_prompt v{v1_ver} -> production (rollback)", "đã hậu kiểm production trở về v1")
         except Exception as exc:
             log(False, f"update_prompt v{v1_ver} -> production (rollback)", f"{type(exc).__name__}: {exc}")
-    else:
+    elif not args.stop_after_promote:
         log(False, "update_prompt v1 -> production (rollback)", "không tìm thấy version chứa v1")
+
+    # Refresh after lifecycle operations so evidence represents the final server
+    # state rather than the snapshot taken before promote/rollback.
+    try:
+        final_items: list[dict] = []
+        resp = client.api.prompts.list(name=PROMPT_NAME)
+        for meta in getattr(resp, "data", []) or []:
+            for ver in getattr(meta, "versions", []) or []:
+                detail = client.api.prompts.get(PROMPT_NAME, version=ver)
+                final_items.append(
+                    {
+                        "name": PROMPT_NAME,
+                        "version": getattr(detail, "version", ver),
+                        "labels": list(getattr(detail, "labels", []) or []),
+                        "prompt": getattr(detail, "prompt", None),
+                        "commit_message": getattr(detail, "commit_message", None),
+                    }
+                )
+        versions.extend(final_items)
+    except Exception as exc:
+        log(False, "refresh final prompt state", f"{type(exc).__name__}: {exc}")
 
     # -- Ghi evidence -----------------------------------------------------------
     # De-dup theo (name, version) giữ thứ tự version tăng dần.
@@ -231,19 +292,23 @@ def main() -> None:
     (EVIDENCE_DIR / "prompt_versions.json").write_text(
         json.dumps(unique, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+    (EVIDENCE_DIR / "prompt_lifecycle.json").write_text(
+        json.dumps(lifecycle, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     lines = [f"{PROMPT_NAME} — các version trên Langfuse:"]
     for it in unique:
         lines.append(
             f"  v{it.get('version')}  labels={it.get('labels')}  "
             f"commit={it.get('commit_message')!r}  source={(it.get('prompt') or '')[:60]!r}..."
         )
-    lines.append(
-        f"production → v{v1_ver} (rollback) sau khi đổi sang v{v2_ver}; "
-        "chạy load_test để ghi trace."
-    )
-    (EVIDENCE_DIR / "prompt_versions.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if args.stop_after_promote:
+        lines.append(f"production → v{v2_ver} (đang giữ trạng thái promoted để chụp UI).")
+    else:
+        lines.append(
+            f"production → v{v1_ver} (rollback) sau khi đổi sang v{v2_ver}; "
+            "chạy load_test để ghi trace."
+        )
     print("\nEvidence saved ->", EVIDENCE_DIR / "prompt_versions.json")
-    print("Evidence saved ->", EVIDENCE_DIR / "prompt_versions.txt")
     for line in lines:
         print("  " + line)
 
