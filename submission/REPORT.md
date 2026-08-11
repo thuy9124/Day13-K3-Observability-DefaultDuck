@@ -73,11 +73,13 @@ rollback an toàn.
   tập fallback/rollback.
 - Audit đầy đủ: [`evidence/challenge-investigation.json`](evidence/challenge-investigation.json).
 
-## 7. Đóng góp cá nhân
+## 7. Phân công và đóng góp cá nhân
 
-| Thành viên | Phần việc | Commit/PR | Điều đã học |
-|---|---|---|---|
-| Dương Minh Quân — `2A202601903` | CP2 lifecycle/traces/evidence | `63fa173` | Hậu kiểm prompt lifecycle qua API |
-| khanhngo | Prompt v2 và tài liệu tracing | nhánh `khanhngo` | Prompt metadata và rollback |
-| Thành viên CP2B | Dashboard contract, SLO, alerts, runbook | `fda8021` | Thiết kế alert theo SLO |
-| anhnvVNU | V4, hardening observability, dashboard runtime, challenge investigation | commit bàn giao cuối | Metrics → Traces → Logs và rollback có evidence |
+| Thành viên | MSSV | Phần việc phụ trách | Commit/evidence | Kết quả bàn giao |
+|---|---|---|---|---|
+| Lê Thị Thuý | `2A202601381` | **Checkpoint 1:** structured JSON logging, correlation ID, PII scrubbing và metrics nền tảng | `936e28c` | Log có đủ trường bắt buộc; request ID xuyên suốt header/body/log; dữ liệu nhạy cảm được che |
+| Phí Đình Hoàng Anh | `2A202601853` | **Checkpoint 2:** thiết kế và triển khai prompt candidate V3; cập nhật luồng prompt versioning/trace collection | `5f14ea2` | Prompt `day13-chat` V3 với label `candidate-v3`, sẵn sàng so sánh với các phiên bản khác |
+| Ngô Việt Anh | `2A202601579` | **Tích hợp & Checkpoint 3:** tối ưu prompt V4, hardening observability, dựng dashboard runtime, chạy challenge và điều tra root cause | `48ea56f`, `7c428ef` | V4 có trace/evidence; hoàn thiện kiểm thử; xác định `rag.retrieve` là nguyên nhân latency và lập hướng khắc phục |
+| Ngô Đình Khánh | `2A202601625` | **Checkpoint 2:** xây dựng prompt candidate V2; bổ sung Langfuse tracing, prompt metadata và tài liệu rollback | `84360ce`, `6bd73a7` | Prompt V2 có version/label rõ ràng; trace liên kết được với managed prompt |
+| Trần Thị Kiều Oanh | `2A202601417` | **Dashboard & vận hành:** định nghĩa dashboard contract, 6 panels, SLO, alert rules và runbook | `fda8021` | Dashboard hợp lệ 6/6; có ngưỡng latency/error/quality và hướng xử lý cảnh báo |
+| Dương Minh Quân | `2A202601903` | **Checkpoint 2 automation:** tự động hoá prompt lifecycle, thu baseline/candidate traces và chuẩn bị evidence kiểm chứng | `63fa173`, `0be20cd` | Có scripts tạo/promote/rollback prompt; evidence API và trace phục vụ đối chiếu phiên bản |
