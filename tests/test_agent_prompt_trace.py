@@ -39,6 +39,7 @@ def test_agent_links_prompt_version_to_trace_and_generation(monkeypatch) -> None
     monkeypatch.setattr(agent_module, "get_langfuse_client", lambda: client)
 
     agent = agent_module.LabAgent()
+    monkeypatch.setattr(agent, "_retrieve", lambda message: ["Tracing test document"])
     agent_module.LabAgent.run.__wrapped__(
         agent,
         user_id="student-01",
@@ -54,6 +55,9 @@ def test_agent_links_prompt_version_to_trace_and_generation(monkeypatch) -> None
         "prompt_label": "production",
         "prompt_version": "3",
         "prompt_source": "langfuse",
+        "correlation_id": None,
+        "feature": "qa",
+        "model": "claude-sonnet-4-5",
     }
     assert generation_update["prompt"] is client.prompt
     assert generation_update["metadata"]["prompt_version"] == "3"

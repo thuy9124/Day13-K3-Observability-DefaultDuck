@@ -1,3 +1,4 @@
+from app.logging_config import scrub_event
 from app.pii import scrub_text
 
 
@@ -20,3 +21,15 @@ def test_scrub_common_vietnamese_phone_formats() -> None:
         out = scrub_text(f"Contact: {phone_number}")
         assert phone_number not in out
         assert "REDACTED_PHONE_VN" in out
+
+
+def test_scrub_event_redacts_nested_values() -> None:
+    event = {
+        "session_id": "student@vinuni.edu.vn",
+        "payload": {"items": ["Call 090 123 4567"]},
+    }
+
+    scrubbed = scrub_event(None, "info", event)
+
+    assert "student@" not in scrubbed["session_id"]
+    assert "090 123 4567" not in scrubbed["payload"]["items"][0]

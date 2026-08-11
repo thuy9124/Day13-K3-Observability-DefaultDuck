@@ -93,6 +93,7 @@ def main() -> None:
                     "5",
                     "--base-url",
                     args.base_url,
+                    "--sanitize-pii",
                 ],
                 cwd=str(REPO_ROOT),
                 check=False,

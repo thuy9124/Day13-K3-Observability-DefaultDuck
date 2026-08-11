@@ -1,0 +1,46 @@
+{
+  "challenge_id": "day13-k3-observability-v1",
+  "cohort": "K3",
+  "incident": "rag_slow",
+  "affected_feature": "refund",
+  "configured_latency_threshold_ms": 2000,
+  "metrics": {
+    "traffic": 5,
+    "latency_p50_ms": 2651,
+    "latency_p95_ms": 5209,
+    "latency_p99_ms": 5209,
+    "error_rate_pct": 0.0,
+    "quality_avg": 0.86
+  },
+  "representative_trace": {
+    "trace_id": "170fd58c40f889d6a438d6ef497c909b",
+    "correlation_id": "req-1e041367",
+    "trace_latency_ms": 2655,
+    "prompt_version": 1,
+    "rag_span": {
+      "observation_id": "e7e482feaf8c9b8b",
+      "name": "rag.retrieve",
+      "duration_ms": 2504
+    },
+    "log": {
+      "event": "response_sent",
+      "feature": "refund",
+      "model": "claude-sonnet-4-5",
+      "latency_ms": 2651,
+      "tokens_in": 34,
+      "tokens_out": 132,
+      "cost_usd": 0.002082,
+      "quality_score": 0.8
+    }
+  },
+  "trace_ids": [
+    "170fd58c40f889d6a438d6ef497c909b",
+    "c93cb1a52fce799aa199193687e9c2a8",
+    "c346fc75fad6798513396627fe92dbbb",
+    "9c41dae309bd3d62588be76341ba2e23",
+    "aeb8c85a96444796bb58114f27b334e6"
+  ],
+  "root_cause": "The released rag_slow incident adds about 2.5 seconds to the RAG retrieval path. The rag.retrieve span accounts for nearly all abnormal request latency.",
+  "fix_action": "Disable the injected incident; in a real service add a retrieval timeout, cache frequent refund-policy results, and use a safe fallback when the vector store is slow.",
+  "preventive_measure": "Alert on refund latency above the challenge threshold, track the rag.retrieve span separately, enforce a dependency latency budget, and rehearse fallback/rollback behavior."
+}

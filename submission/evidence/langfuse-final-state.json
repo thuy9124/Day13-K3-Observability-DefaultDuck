@@ -1,0 +1,15 @@
+{
+  "verified_at": "2026-08-11T07:41:00Z",
+  "auth_ok": true,
+  "prompt_name": "day13-chat",
+  "versions": [
+    {"version": 1, "labels": ["baseline", "production"]},
+    {"version": 2, "labels": ["candidate-v2"]},
+    {"version": 3, "labels": ["candidate-v3"]},
+    {"version": 4, "labels": ["candidate", "candidate-v4", "latest"]}
+  ],
+  "production_version": 1,
+  "traces_returned_by_latest_100_query": 85,
+  "v4_traces": 10,
+  "challenge_traces_over_2_seconds": 5
+}

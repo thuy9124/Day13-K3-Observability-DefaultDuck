@@ -134,3 +134,20 @@ def test_sdk_fallback_is_not_reported_as_managed_prompt() -> None:
     assert resolved.version == "local-v1"
     assert resolved.fetch_error == "LangfuseFallback"
     assert resolved.managed_prompt is None
+
+
+def test_v4_local_fallback_keeps_grounding_contract(monkeypatch) -> None:
+    from app.prompt_management import resolve_prompt
+
+    monkeypatch.setenv("LANGFUSE_PROMPT_LABEL", "candidate-v4")
+    resolved = resolve_prompt(
+        UnexpectedPromptClient(),
+        feature="refund",
+        docs=["Refunds are available within 7 days."],
+        message="What is the refund window?",
+        enabled=False,
+    )
+
+    assert resolved.version == "local-v4"
+    assert "Use only facts supported by Context" in resolved.text
+    assert "Refunds are available within 7 days." in resolved.text

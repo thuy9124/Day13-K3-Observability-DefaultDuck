@@ -1,8 +1,8 @@
 {
   "prompt_name": "day13-chat",
   "baseline_version": 1,
-  "candidate_version": 2,
-  "candidate_version_after_normalize": 2,
-  "after_promote_production_version": 2,
+  "candidate_version": 4,
+  "candidate_version_after_normalize": 4,
+  "after_promote_production_version": 4,
   "after_rollback_production_version": 1
 }

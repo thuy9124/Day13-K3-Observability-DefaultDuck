@@ -10,6 +10,20 @@ DEFAULT_PROMPT_V2_TEMPLATE = (
     "Feature={{feature}}\nDocs={{docs}}\nQuestion={{message}}\n"
     "Yêu cầu: Trả lời ngắn gọn, có cấu trúc và đúng trọng tâm từ Docs."
 )
+DEFAULT_PROMPT_V3_TEMPLATE = (
+    "Feature={{feature}}\nDocs={{docs}}\nQuestion={{message}}\n"
+    "Rules: answer from Docs only; max 60 words; no PII; end with a one-line summary."
+)
+DEFAULT_PROMPT_V4_TEMPLATE = (
+    "You are a grounded support assistant.\n"
+    "Feature={{feature}}\nContext={{docs}}\nUser question={{message}}\n"
+    "Rules:\n"
+    "1. Use only facts supported by Context; never invent missing details.\n"
+    "2. If Context is insufficient, say so and ask one focused follow-up question.\n"
+    "3. Do not repeat or expose personal data from the question.\n"
+    "4. Answer directly in at most 80 words.\n"
+    "Output exactly two sections: Answer and Evidence."
+)
 
 
 @dataclass(frozen=True)
@@ -43,8 +57,19 @@ def resolve_prompt(
 ) -> ResolvedPrompt:
     name = os.getenv("LANGFUSE_PROMPT_NAME", "day13-chat")
     label = os.getenv("LANGFUSE_PROMPT_LABEL", "production")
-    template = DEFAULT_PROMPT_V2_TEMPLATE if label in ("candidate", "v2", "staging") else DEFAULT_PROMPT_TEMPLATE
-    version_name = "local-v2" if label in ("candidate", "v2", "staging") else "local-v1"
+    local_variants = {
+        "candidate-v2": (DEFAULT_PROMPT_V2_TEMPLATE, "local-v2"),
+        "v2": (DEFAULT_PROMPT_V2_TEMPLATE, "local-v2"),
+        "candidate-v3": (DEFAULT_PROMPT_V3_TEMPLATE, "local-v3"),
+        "v3": (DEFAULT_PROMPT_V3_TEMPLATE, "local-v3"),
+        "candidate": (DEFAULT_PROMPT_V4_TEMPLATE, "local-v4"),
+        "candidate-v4": (DEFAULT_PROMPT_V4_TEMPLATE, "local-v4"),
+        "v4": (DEFAULT_PROMPT_V4_TEMPLATE, "local-v4"),
+        "staging": (DEFAULT_PROMPT_V4_TEMPLATE, "local-v4"),
+    }
+    template, version_name = local_variants.get(
+        label, (DEFAULT_PROMPT_TEMPLATE, "local-v1")
+    )
     text = _compile_local_prompt(feature=feature, docs=docs, message=message, template=template)
     if enabled:
         try:

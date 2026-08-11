@@ -1,12 +1,13 @@
-"""Thiết lập prompt versioning v1/v2 và giữ v3 mở rộng trên Langfuse.
+"""Thiết lập prompt versioning v1-v4 trên Langfuse.
 
 Quy trình theo docs/PROMPT_VERSIONING.md:
 
   1. Tạo v1 (template gốc), gắn label `baseline` + `production`.
-  2. Tạo v2 (thêm dòng hướng dẫn), gắn label `candidate`.
-  3. Giữ v3 mở rộng với label `experimental` khi cần tạo mới.
+  2. Tạo v2 và gắn label `candidate-v2`.
+  3. Tạo v3 và gắn label `candidate-v3`.
+  4. Tạo v4 tối ưu và gắn labels `candidate`, `candidate-v4`.
   4. Kiểm tra các version qua API GET /prompts.
-  5. Chuyển label `production` sang v2 (đổi label).
+  5. Chuyển label `production` sang v4 (đổi label).
   6. Rollback `production` về v1.
 
 Idempotent: chạy lại không tạo trùng — nếu version 1/2 đã tồn tại thì dùng lại,
@@ -54,6 +55,18 @@ PROMPT_V3 = (
     "Rules: answer from Docs only; max 60 words; no PII; end with a one-line summary."
 )
 
+# v4: grounded, privacy-aware, concise, deterministic output contract.
+PROMPT_V4 = (
+    "You are a grounded support assistant.\n"
+    "Feature={{feature}}\nContext={{docs}}\nUser question={{message}}\n"
+    "Rules:\n"
+    "1. Use only facts supported by Context; never invent missing details.\n"
+    "2. If Context is insufficient, say so and ask one focused follow-up question.\n"
+    "3. Do not repeat or expose personal data from the question.\n"
+    "4. Answer directly in at most 80 words.\n"
+    "Output exactly two sections: Answer and Evidence."
+)
+
 PROMPT_NAME = "day13-chat"
 
 EVIDENCE_DIR = REPO_ROOT / "submission" / "evidence"
@@ -81,12 +94,12 @@ def _redact_env_key(name: str) -> str:
 
 def main() -> None:
     configure_utf8_stdio()
-    parser = argparse.ArgumentParser(description="Setup prompt v1/v2/v3 + đổi label + rollback trên Langfuse")
+    parser = argparse.ArgumentParser(description="Setup prompt v1-v4 + promote v4 + rollback trên Langfuse")
     parser.add_argument("--dry-run", action="store_true", help="Chỉ in kế hoạch, không gọi API")
     parser.add_argument(
         "--stop-after-promote",
         action="store_true",
-        help="Dừng với production ở v2 để chụp UI; chạy lại không cờ để rollback về v1",
+        help="Dừng với production ở v4 để chạy trace/chụp UI; chạy lại không cờ để rollback về v1",
     )
     args = parser.parse_args()
 
@@ -97,6 +110,17 @@ def main() -> None:
         sys.exit(1)
     print(f"Langfuse keys: public={pub} secret={sec}")
 
+    if args.dry_run:
+        print("DRY  | would create/reuse v1 labels=['baseline', 'production']")
+        print("DRY  | would create/reuse v2 labels=['candidate-v2']")
+        print("DRY  | would create/reuse v3 labels=['candidate-v3']")
+        print("DRY  | would create/reuse v4 labels=['candidate', 'candidate-v4']")
+        print("DRY  | đổi label production -> v4")
+        if not args.stop_after_promote:
+            print("DRY  | rollback production -> v1")
+        print("Dry-run xong; không gọi Langfuse API.")
+        return
+
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
     client = Langfuse()
 
@@ -104,12 +128,13 @@ def main() -> None:
         prefix = "OK  " if ok else "FAIL"
         print(f"{prefix} | {step}" + (f" | {detail}" if detail else ""))
 
-    # -- 1..3. Tạo/đảm bảo tồn tại các version --------------------------------
+    # -- 1..4. Tạo/đảm bảo tồn tại các version --------------------------------
     versions: list[dict] = []
     plan = [
         (1, PROMPT_V1, ["baseline", "production"]),
-        (2, PROMPT_V2, ["candidate"]),
-        (3, PROMPT_V3, ["experimental"]),
+        (2, PROMPT_V2, ["candidate-v2"]),
+        (3, PROMPT_V3, ["candidate-v3"]),
+        (4, PROMPT_V4, ["candidate", "candidate-v4"]),
     ]
 
     # Đọc các version đã có trên server theo nội dung prompt để tái dùng
@@ -138,12 +163,23 @@ def main() -> None:
         log(False, "list existing prompts", f"{type(exc).__name__}: {exc} (tiếp tục tạo mới)")
 
     for ver, text, labels in plan:
-        if args.dry_run:
-            print(f"DRY  | would create v{ver} labels={labels}")
-            continue
         if text in existing_by_content:
             hit = existing_by_content[text]
-            log(True, f"reuse v{hit['version']}", f"content khớp labels={hit['labels']}")
+            try:
+                client.update_prompt(
+                    name=PROMPT_NAME,
+                    version=hit["version"],
+                    new_labels=labels,
+                )
+                refreshed = client.api.prompts.get(PROMPT_NAME, version=hit["version"])
+                hit["labels"] = list(getattr(refreshed, "labels", []) or [])
+                log(
+                    True,
+                    f"reuse v{hit['version']}",
+                    f"content khớp; labels chuẩn hóa={hit['labels']}",
+                )
+            except Exception as exc:
+                log(False, f"normalize v{hit['version']} labels", f"{type(exc).__name__}: {exc}")
             versions.append(hit)
             continue
         try:
@@ -167,14 +203,7 @@ def main() -> None:
         except Exception as exc:
             log(False, f"create_prompt v{ver}", f"{type(exc).__name__}: {exc}")
 
-    if args.dry_run:
-        print("DRY  | đổi label production -> v2")
-        if not args.stop_after_promote:
-            print("DRY  | rollback production -> v1")
-        print("Dry-run xong. Bật --dry-run off (mặc định) khi có backend.")
-        return
-
-    # -- 4. Lấy toàn bộ version từ server để làm evidence ----------------------
+    # -- 5. Lấy toàn bộ version từ server để làm evidence ----------------------
     try:
         resp = client.api.prompts.list(name=PROMPT_NAME)
         items: list[dict] = []
@@ -198,47 +227,49 @@ def main() -> None:
     except Exception as exc:
         log(False, "list prompts API", f"{type(exc).__name__}: {exc}")
 
-    # -- 5. Đổi label production sang version chứa v2 ---------------------------
-    # Target theo version thực tế giữ nội dung v2 (sau content-reuse số version
-    # có thể không còn là 1/2 nếu chạy nhiều lần).
-    v2_ver = existing_by_content.get(PROMPT_V2, {}).get("version")
+    # -- 6. Đổi label production sang version chứa v4 ---------------------------
+    # Target theo nội dung thay vì giả định version number để chạy lại an toàn.
+    v4_ver = existing_by_content.get(PROMPT_V4, {}).get("version")
     v1_ver = existing_by_content.get(PROMPT_V1, {}).get("version")
-    if not v1_ver or not v2_ver:
+    if not v1_ver or not v4_ver:
         v1_ver = next((v.get("version") for v in versions if v.get("prompt") == PROMPT_V1), v1_ver)
-        v2_ver = next((v.get("version") for v in versions if v.get("prompt") == PROMPT_V2), v2_ver)
+        v4_ver = next((v.get("version") for v in versions if v.get("prompt") == PROMPT_V4), v4_ver)
 
     lifecycle: dict[str, object] = {
         "prompt_name": PROMPT_NAME,
         "baseline_version": v1_ver,
-        "candidate_version": v2_ver,
+        "candidate_version": v4_ver,
     }
-    if v2_ver is not None:
+    if v4_ver is not None:
         try:
-            # Explicitly move candidate away from any stale optional version.
-            client.update_prompt(name=PROMPT_NAME, version=v2_ver, new_labels=["candidate"])
+            client.update_prompt(
+                name=PROMPT_NAME, version=v4_ver, new_labels=["candidate", "candidate-v4"]
+            )
             candidate = client.api.prompts.get(PROMPT_NAME, label="candidate")
             candidate_ver = getattr(candidate, "version", None)
             lifecycle["candidate_version_after_normalize"] = candidate_ver
-            if candidate_ver != v2_ver:
-                raise RuntimeError(f"hậu kiểm candidate=v{candidate_ver}, mong đợi v{v2_ver}")
+            if candidate_ver != v4_ver:
+                raise RuntimeError(f"hậu kiểm candidate=v{candidate_ver}, mong đợi v{v4_ver}")
 
             client.update_prompt(
-                name=PROMPT_NAME, version=v2_ver, new_labels=["candidate", "production"]
+                name=PROMPT_NAME,
+                version=v4_ver,
+                new_labels=["candidate", "candidate-v4", "production"],
             )
             promoted = client.api.prompts.get(PROMPT_NAME, label="production")
             promoted_ver = getattr(promoted, "version", None)
             lifecycle["after_promote_production_version"] = promoted_ver
-            if promoted_ver != v2_ver:
-                raise RuntimeError(f"hậu kiểm production=v{promoted_ver}, mong đợi v{v2_ver}")
-            log(True, f"update_prompt v{v2_ver} -> production", "đã hậu kiểm production trỏ tới v2")
+            if promoted_ver != v4_ver:
+                raise RuntimeError(f"hậu kiểm production=v{promoted_ver}, mong đợi v{v4_ver}")
+            log(True, f"update_prompt v{v4_ver} -> production", "đã hậu kiểm production trỏ tới v4")
         except Exception as exc:
-            log(False, f"update_prompt v{v2_ver} -> production", f"{type(exc).__name__}: {exc}")
+            log(False, f"update_prompt v{v4_ver} -> production", f"{type(exc).__name__}: {exc}")
     else:
-        log(False, "update_prompt v2 -> production", "không tìm thấy version chứa v2")
+        log(False, "update_prompt v4 -> production", "không tìm thấy version chứa v4")
 
     # -- 6. Rollback production về version chứa v1 ------------------------------
     if args.stop_after_promote:
-        log(True, "stop after promote", "giữ production ở v2 để chụp evidence UI")
+        log(True, "stop after promote", "giữ production ở v4 để tạo trace/chụp evidence UI")
     elif v1_ver is not None:
         try:
             client.update_prompt(
@@ -302,10 +333,10 @@ def main() -> None:
             f"commit={it.get('commit_message')!r}  source={(it.get('prompt') or '')[:60]!r}..."
         )
     if args.stop_after_promote:
-        lines.append(f"production → v{v2_ver} (đang giữ trạng thái promoted để chụp UI).")
+        lines.append(f"production → v{v4_ver} (đang giữ trạng thái promoted để tạo trace/chụp UI).")
     else:
         lines.append(
-            f"production → v{v1_ver} (rollback) sau khi đổi sang v{v2_ver}; "
+            f"production → v{v1_ver} (rollback) sau khi đổi sang v{v4_ver}; "
             "chạy load_test để ghi trace."
         )
     print("\nEvidence saved ->", EVIDENCE_DIR / "prompt_versions.json")

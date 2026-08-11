@@ -9,6 +9,7 @@ from .mock_rag import retrieve
 from .pii import hash_user_id, summarize_text
 from .prompt_management import resolve_prompt
 from .tracing import get_langfuse_client, observe, tracing_enabled
+from structlog.contextvars import get_contextvars
 
 
 @dataclass
@@ -29,7 +30,7 @@ class LabAgent:
     @observe(as_type="generation", capture_input=False, capture_output=False)
     def run(self, user_id: str, feature: str, session_id: str, message: str) -> AgentResult:
         started = time.perf_counter()
-        docs = retrieve(message)
+        docs = self._retrieve(message)
         langfuse_client = get_langfuse_client()
         prompt = resolve_prompt(
             langfuse_client,
@@ -43,6 +44,7 @@ class LabAgent:
         latency_ms = int((time.perf_counter() - started) * 1000)
         cost_usd = self._estimate_cost(response.usage.input_tokens, response.usage.output_tokens)
 
+        log_context = get_contextvars()
         langfuse_client.update_current_trace(
             user_id=hash_user_id(user_id),
             session_id=session_id,
@@ -52,6 +54,9 @@ class LabAgent:
                 "prompt_label": prompt.label,
                 "prompt_version": prompt.version,
                 "prompt_source": prompt.source,
+                "correlation_id": log_context.get("correlation_id"),
+                "feature": feature,
+                "model": self.model,
             },
         )
         langfuse_client.update_current_generation(
@@ -89,6 +94,10 @@ class LabAgent:
             cost_usd=cost_usd,
             quality_score=quality_score,
         )
+
+    @observe(name="rag.retrieve", as_type="span", capture_input=False, capture_output=False)
+    def _retrieve(self, message: str) -> list[str]:
+        return retrieve(message)
 
     def _estimate_cost(self, tokens_in: int, tokens_out: int) -> float:
         input_cost = (tokens_in / 1_000_000) * 3

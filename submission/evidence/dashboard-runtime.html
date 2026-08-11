@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Day 13 AI Observability</title>
+<style>
+*{box-sizing:border-box} body{margin:0;background:#08111f;color:#e7eefb;font-family:Segoe UI,Arial,sans-serif}
+main{max-width:1360px;margin:auto;padding:36px} header{display:flex;justify-content:space-between;align-items:end;margin-bottom:24px}
+h1{font-size:34px;margin:0 0 8px} .meta,.eyebrow{color:#8fa6c8;font-size:13px;letter-spacing:.08em}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px} .card{min-height:245px;padding:22px;border:1px solid #263b59;border-radius:16px;background:linear-gradient(145deg,#101e32,#0b1728);box-shadow:0 14px 30px #03081280}
+h2{font-size:18px;margin:10px 0 28px} .value{font-size:27px;font-weight:700;color:#63e6be;margin-bottom:24px}
+.threshold{display:inline-block;background:#162b45;border:1px solid #315477;border-radius:999px;padding:7px 11px;color:#b9d5f4;font-size:12px}
+code{display:block;margin-top:18px;color:#8fa6c8;font-size:11px;white-space:normal;line-height:1.5}
+.source{margin-top:22px;color:#7187a7;font-size:12px} @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style></head><body><main>
+<header><div><h1>Day 13 AI Observability</h1><div class="meta">Runtime dashboard · real JSONL data</div></div>
+<div class="meta">Last 60 min · refresh 30s<br>2026-08-11T07:38:21+00:00</div></header>
+<div class="grid">
+            <section class="card" id="latency">
+              <div class="eyebrow">LATENCY</div>
+              <h2>Latency percentiles</h2>
+              <div class="value">P50 150 · P95 3629 · P99 5209</div>
+              <div class="threshold">SLO: p95
+                lte 3000
+                ms</div>
+              <code>event == &quot;response_sent&quot; | percentile(latency_ms, [50, 95, 99])</code>
+            </section>
+            
+            <section class="card" id="traffic">
+              <div class="eyebrow">TRAFFIC</div>
+              <h2>Request traffic</h2>
+              <div class="value">25 requests · 0.42/min</div>
+              <div class="threshold">SLO: rate_per_minute
+                gte 1
+                requests_per_minute</div>
+              <code>event == &quot;request_received&quot; | count() by 1m</code>
+            </section>
+            
+            <section class="card" id="errors">
+              <div class="eyebrow">ERRORS</div>
+              <h2>Error rate and breakdown</h2>
+              <div class="value">0.00% · 0 failures</div>
+              <div class="threshold">SLO: error_rate_pct
+                lte 2
+                percent</div>
+              <code>count(event == &quot;request_failed&quot;) / count(event == &quot;request_received&quot;) * 100; count_by(error_type)</code>
+            </section>
+            
+            <section class="card" id="cost">
+              <div class="eyebrow">COST</div>
+              <h2>Cost over time</h2>
+              <div class="value">$0.0542 total</div>
+              <div class="threshold">SLO: total
+                lte 2.5
+                usd</div>
+              <code>event == &quot;response_sent&quot; | sum(cost_usd) by 1m; sum(cost_usd)</code>
+            </section>
+            
+            <section class="card" id="tokens">
+              <div class="eyebrow">TOKENS</div>
+              <h2>Input and output tokens</h2>
+              <div class="value">1,702 input · 3,271 output</div>
+              <div class="threshold">SLO: sum_by_field
+                lte 50000
+                tokens</div>
+              <code>event == &quot;response_sent&quot; | sum(tokens_in), sum(tokens_out)</code>
+            </section>
+            
+            <section class="card" id="quality">
+              <div class="eyebrow">QUALITY</div>
+              <h2>Quality proxy</h2>
+              <div class="value">0.876 average</div>
+              <div class="threshold">SLO: mean
+                gte 0.75
+                score_0_to_1</div>
+              <code>event == &quot;response_sent&quot; | mean(quality_score)</code>
+            </section>
+            </div>
+<div class="source">Source: data/logs.jsonl · 55 records · 25 completed responses</div>
+</main></body></html>

@@ -1,69 +1,37 @@
 # Evidence — Managed Prompt Versioning và Traces
 
-Ngày thu evidence: 2026-08-11.
-
-Tài liệu gốc của phần Prompt Versioning v2/Tracing được ghi nhận cho **khanhngo
-(Member 2A)**. Các trace ID và audit API bên dưới là evidence runtime được bổ
-sung khi hoàn thiện Checkpoint 2; việc bổ sung không thay đổi attribution của
-phần implementation đã có.
+Ngày thu evidence: 2026-08-11. Nguồn là Langfuse Prompts/Traces API của project
+đang cấu hình trong `.env`; secret không được lưu trong evidence.
 
 ## Managed versions
 
-- `day13-chat` v1: labels `baseline`, `production`.
-- `day13-chat` v2: label `candidate`.
-- Promote đã thực hiện: `production → v2`.
-- Rollback đã thực hiện và là trạng thái cuối: `production → v1`.
+- `day13-chat` v1: `baseline`, `production`.
+- `day13-chat` v2: `candidate-v2`.
+- `day13-chat` v3: `candidate-v3`.
+- `day13-chat` v4: `candidate`, `candidate-v4`, `latest`.
 
-Prompt v1:
+V4 bổ sung grounding, xử lý context thiếu, privacy rule, giới hạn 80 từ và output
+contract `Answer`/`Evidence`. Ba biến bắt buộc `{{feature}}`, `{{docs}}`,
+`{{message}}` vẫn được giữ nguyên.
 
-```text
-Feature={{feature}}
-Docs={{docs}}
-Question={{message}}
-```
+Audit lifecycle tại [`prompt_lifecycle.json`](prompt_lifecycle.json):
 
-Prompt v2 candidate do phần việc 2A triển khai:
+1. `production` được promote từ v1 sang v4.
+2. Trace v4 được tạo với `prompt_label=candidate-v4`, `prompt_version=4`.
+3. `production` được rollback về v1 và hậu kiểm qua API.
 
-```text
-Feature={{feature}}
-Docs={{docs}}
-Question={{message}}
-Answer in a clear, structured way in 3-5 sentences.
-```
+## Trace evidence
 
-Hậu kiểm được đọc lại từ Langfuse Prompts API và lưu tại
-[`prompt_lifecycle.json`](prompt_lifecycle.json). Danh sách version cuối nằm tại
-[`prompt_versions.json`](prompt_versions.json).
+- 10 trace baseline/v1: [`baseline_current_traces.json`](baseline_current_traces.json).
+- 10 trace candidate-v4/v4: [`v4_traces.json`](v4_traces.json).
+- Baseline đại diện: `cfc841269263ccc4923639dfdbf70bbf`.
+- V4 đại diện: `c48d441070e024fa403706e88c42c59e`.
 
-## Dynamic trace metadata linkage
+Trace metadata có `prompt_name`, `prompt_label`, `prompt_version`,
+`prompt_source=langfuse`, user hash, session, feature/model và tags. Generation
+được liên kết với managed prompt object. Input dùng để thu evidence đã được
+redact PII trước khi gửi.
 
-Khi app lấy managed prompt candidate, trace và generation có metadata:
-
-```json
-{
-  "prompt_name": "day13-chat",
-  "prompt_label": "candidate",
-  "prompt_version": "2",
-  "prompt_source": "langfuse"
-}
-```
-
-Nếu Langfuse không khả dụng, app dùng local fallback và ghi rõ
-`prompt_source=local-fallback`, `prompt_version=local-v2`; fallback không được
-báo cáo giả thành managed prompt.
-
-Generation nhận managed prompt object qua trường `prompt`, nhờ đó Langfuse có
-thể liên kết generation với đúng prompt version.
-
-## Traces
-
-- 10 traces baseline/v1: [`baseline_traces.json`](baseline_traces.json).
-- 10 traces candidate/v2: [`candidate_traces.json`](candidate_traces.json).
-- Baseline/v1 representative: `46597bc000a191ff5c39c43a2f5a945c`.
-- Candidate/v2 representative: `cdca6743b1647c8a5928037763f808f4`.
-
-## Screenshots
-
-Chưa có screenshot Langfuse UI do tài khoản hiện tại không có quyền truy cập
-project chứa traces. Không có ảnh render hoặc ảnh mô phỏng trong evidence. File
-JSON chỉ là nguồn machine-readable để đối chiếu, không được gọi là screenshot.
+Danh sách version cuối nằm tại [`prompt_versions.json`](prompt_versions.json).
+Ảnh Langfuse UI vẫn nên được thành viên đăng nhập project chụp thêm nếu giảng
+viên bắt buộc screenshot thay vì audit API machine-readable.

@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from app.challenge import load_challenge, ordered_queries
 from app.cli import configure_utf8_stdio
+from app.pii import scrub_text
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 QUERIES = Path("data/sample_queries.jsonl")
@@ -34,6 +35,11 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=1, help="Number of concurrent requests")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="API base URL")
     parser.add_argument(
+        "--sanitize-pii",
+        action="store_true",
+        help="Redact known PII from messages before sending requests.",
+    )
+    parser.add_argument(
         "--challenge",
         action="store_true",
         help="Dùng input chính thức trong config/challenge.json sau khi được release.",
@@ -49,6 +55,10 @@ def main() -> None:
             json.loads(line)
             for line in QUERIES.read_text(encoding="utf-8").splitlines()
             if line.strip()
+        ]
+    if args.sanitize_pii:
+        payloads = [
+            {**payload, "message": scrub_text(payload["message"])} for payload in payloads
         ]
     
     with httpx.Client(timeout=30.0) as client:
