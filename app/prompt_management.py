@@ -6,6 +6,10 @@ from typing import Any
 
 
 DEFAULT_PROMPT_TEMPLATE = "Feature={{feature}}\nDocs={{docs}}\nQuestion={{message}}"
+DEFAULT_PROMPT_V2_TEMPLATE = (
+    "Feature={{feature}}\nDocs={{docs}}\nQuestion={{message}}\n"
+    "Yêu cầu: Trả lời ngắn gọn, có cấu trúc và đúng trọng tâm từ Docs."
+)
 
 
 @dataclass(frozen=True)
@@ -19,9 +23,11 @@ class ResolvedPrompt:
     fetch_error: str | None = None
 
 
-def _compile_local_prompt(*, feature: str, docs: list[str], message: str) -> str:
+def _compile_local_prompt(
+    *, feature: str, docs: list[str], message: str, template: str = DEFAULT_PROMPT_TEMPLATE
+) -> str:
     return (
-        DEFAULT_PROMPT_TEMPLATE.replace("{{feature}}", feature)
+        template.replace("{{feature}}", feature)
         .replace("{{docs}}", "\n".join(docs))
         .replace("{{message}}", message)
     )
@@ -37,7 +43,9 @@ def resolve_prompt(
 ) -> ResolvedPrompt:
     name = os.getenv("LANGFUSE_PROMPT_NAME", "day13-chat")
     label = os.getenv("LANGFUSE_PROMPT_LABEL", "production")
-    text = _compile_local_prompt(feature=feature, docs=docs, message=message)
+    template = DEFAULT_PROMPT_V2_TEMPLATE if label in ("candidate", "v2", "staging") else DEFAULT_PROMPT_TEMPLATE
+    version_name = "local-v2" if label in ("candidate", "v2", "staging") else "local-v1"
+    text = _compile_local_prompt(feature=feature, docs=docs, message=message, template=template)
     if enabled:
         try:
             managed_prompt = client.get_prompt(
@@ -54,7 +62,7 @@ def resolve_prompt(
                     text=text,
                     name=name,
                     label=label,
-                    version="local-v1",
+                    version=version_name,
                     source="local-fallback",
                     fetch_error="LangfuseFallback",
                 )
@@ -75,7 +83,7 @@ def resolve_prompt(
                 text=text,
                 name=name,
                 label=label,
-                version="local-v1",
+                version=version_name,
                 source="local-fallback",
                 fetch_error=type(exc).__name__,
             )
@@ -84,6 +92,8 @@ def resolve_prompt(
         text=text,
         name=name,
         label=label,
-        version="local-v1",
+        version=version_name,
         source="local",
     )
+
+
