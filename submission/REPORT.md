@@ -56,7 +56,8 @@
 
 | Thành viên | Phần việc | Commit/PR | Điều đã học |
 |---|---|---|---|
-| DefaultDuck (Member 2A) | Tracing Integration, Prompt Versioning & Evidence Documentation | `feat/tracing-prompt-versioning-2a` | Quản lý prompt lifecycle, metadata trace & zero-downtime rollback |
+| khanhngo (Member 2A) | Tracing Integration, Prompt Versioning & Evidence Documentation | `khanhngo` | Quản lý prompt lifecycle, metadata trace & zero-downtime rollback |
 | DefaultDuck (Member 2B) | Logging, PII Redaction, Correlation ID, Alert Rules, Dashboard Contract | `936e28c` | Xây dựng hệ thống Observability chuẩn cho AI Application |
+
 
 
